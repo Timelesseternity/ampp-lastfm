@@ -1,0 +1,13 @@
+# 构建产物
+build/
+*.zip
+
+# 本机工具链（体积大，用 python fetch-toolchain.py 重新下载）
+toolchain/
+lib/*.jar
+
+# 编辑器 / 系统
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
