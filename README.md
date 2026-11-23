@@ -2,9 +2,16 @@
 
 自用插件。把 Apple Music（Android）的当前播放推送到 Last.fm。AM++ 插件 SDK v1 格式。
 
-<img width="1272" height="2800" alt="image" src="https://github.com/user-attachments/assets/8cc5b55f-aa3d-4425-a607-e274e9f6b309" />
-
-<img width="1272" height="3002" alt="image" src="https://github.com/user-attachments/assets/0f8718f9-22bb-4808-b30e-c2fd63ca7fa1" />
+<table>
+  <tr>
+    <td align="center"><img width="320" src="https://github.com/user-attachments/assets/05a4090c-047f-4fa8-b8bd-23e727c56796" alt="插件设置页" /></td>
+    <td align="center"><img width="320" src="https://github.com/user-attachments/assets/af1e8629-cc2f-4359-b1b9-8d246b55a5f2" alt="诊断信息" /></td>
+  </tr>
+  <tr>
+    <td align="center">插件设置页</td>
+    <td align="center">诊断信息</td>
+  </tr>
+</table>
 
 ## 功能
 
