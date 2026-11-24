@@ -48,6 +48,8 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
     private ScrobbleQueue queue;
     private PlaybackTracker tracker;
     private ExecutorService net;
+    /** 点赞/取消专用线程，避免 track.getInfo 的超时把 scrobble 提交堵在后面。 */
+    private ExecutorService likeOps;
     private Handler mainHandler;
     private final List<PluginRegistration> registrations = new ArrayList<PluginRegistration>();
 
@@ -88,6 +90,7 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
         client = new LastfmClient(config);
         tracker = new PlaybackTracker(this);
         net = Executors.newSingleThreadExecutor();
+        likeOps = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
 
         context.onClose(new Runnable() {
@@ -344,7 +347,7 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
             return;
         }
         statusText = "已标记喜欢：" + track.artist + " - " + track.title;
-        net.submit(new Runnable() {
+        likeOps.submit(new Runnable() {
             @Override
             public void run() {
                 try {
@@ -368,7 +371,7 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
             return;
         }
         final Track track = Track.from(snapshot, config);
-        net.submit(new Runnable() {
+        likeOps.submit(new Runnable() {
             @Override
             public void run() {
                 try {
@@ -559,6 +562,9 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
         registrations.clear();
         if (net != null) {
             net.shutdownNow();
+            if (likeOps != null) {
+                likeOps.shutdownNow();
+            }
         }
     }
 
