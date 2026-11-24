@@ -21,8 +21,6 @@ public final class HostBridge {
     public static final String CLS_MEDIA_ITEM =
             "com.apple.android.music.playback.model.PlayerMediaItem";
 
-    /** MediaPlayer 的 READY 状态（未使用，保留说明：实测 AM 播放中返回 1）。 */
-    private static final int STATE_READY = 3;
 
     private final Class<?> controllerClass;
     private final Class<?> playerClass;
@@ -46,13 +44,9 @@ public final class HostBridge {
     private final Method getSubscriptionStoreId;
     private final Method getAlbumTrackNumber;
     private final Method getAlbumDiscNumber;
-    private final Method getLikeState;
     private final Method isLiveRadio;
     private final Method isMediaKindVideo;
 
-    /** LikeState 的常量值，运行时从宿主类读取，不猜。 */
-    private final int likedState;
-    private final int noneState;
     /** 收藏事件入口方法，拿不到为 null。 */
     private final Method likeEventMethod;
     /** 从歌单移除事件入口（撤销喜爱走这条），拿不到为 null。 */
@@ -84,21 +78,8 @@ public final class HostBridge {
         getSubscriptionStoreId = require(mediaItemClass, "getSubscriptionStoreId");
         getAlbumTrackNumber = require(mediaItemClass, "getAlbumTrackNumber");
         getAlbumDiscNumber = require(mediaItemClass, "getAlbumDiscNumber");
-        getLikeState = optional(mediaItemClass, "getLikeState");
         isLiveRadio = optional(mediaItemClass, "isLiveRadio");
         isMediaKindVideo = optional(mediaItemClass, "isMediaKindVideo");
-
-        int liked = -1;
-        int none = -1;
-        try {
-            Class<?> likeState = Class.forName("com.apple.android.music.model.LikeState", false, host);
-            liked = staticInt(likeState, "LIKED", -1);
-            none = staticInt(likeState, "NONE", -1);
-        } catch (Throwable ignored) {
-            // 没有 LikeState 就不做点赞同步。
-        }
-        likedState = liked;
-        noneState = none;
 
         Class<?> likeStateType = null;
         try {
@@ -134,19 +115,6 @@ public final class HostBridge {
             // 缺少该入口时撤销喜爱不可用。
         }
         playlistRemoveMethod = playlistRemove;
-    }
-
-    public int likedState() {
-        return likedState;
-    }
-
-    public int noneState() {
-        return noneState;
-    }
-
-    /** 宿主是否提供了可用的点赞状态常量。 */
-    public boolean likeSupported() {
-        return likedState >= 0 && noneState >= 0;
     }
 
     /**
@@ -243,15 +211,6 @@ public final class HostBridge {
         return null;
     }
 
-    private static int staticInt(Class<?> type, String name, int fallback) {
-        try {
-            java.lang.reflect.Field field = type.getDeclaredField(name);
-            field.setAccessible(true);
-            return field.getInt(null);
-        } catch (Throwable t) {
-            return fallback;
-        }
-    }
 
     public static HostBridge resolve(ClassLoader host) throws PluginUnsupportedException {
         return new HostBridge(host);
@@ -314,7 +273,6 @@ public final class HostBridge {
             s.playing = rate > 0f || state == 1;
             s.live = bool(invoke(isLiveRadio, mediaItem), false);
             s.video = bool(invoke(isMediaKindVideo, mediaItem), false);
-            s.likeState = (int) lng(invoke(getLikeState, mediaItem), -1L);
             if (s.durationMs <= 0L) {
                 s.durationMs = 0L;
             }

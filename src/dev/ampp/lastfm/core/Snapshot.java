@@ -19,8 +19,6 @@ public final class Snapshot {
     public boolean playing;
     public boolean live;
     public boolean video;
-    /** 宿主点赞状态（LikeState: NONE / LIKED / DISLIKED / UNKNOWN），-1 表示读不到。 */
-    public int likeState = -1;
     /** 宿主原始播放状态码，仅用于日志诊断。 */
     public int rawState;
     /** 宿主原始播放速率，仅用于日志诊断。 */

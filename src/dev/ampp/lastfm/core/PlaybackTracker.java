@@ -37,6 +37,11 @@ public final class PlaybackTracker {
         scrobbled = false;
     }
 
+    /** 本曲该发的都发完了（Now Playing 已上报且 scrobble 已结算），可以降频轮询。 */
+    public synchronized boolean isSettled() {
+        return nowPlayingSent && scrobbled;
+    }
+
     public synchronized void update(Snapshot snapshot, long nowMs) {
         if (snapshot == null || !snapshot.usable()) {
             // 停止播放（队列清空、直播、无元数据）：只结束当前会话，不上报。

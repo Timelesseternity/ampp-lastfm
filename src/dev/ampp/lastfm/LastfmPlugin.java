@@ -32,10 +32,10 @@ import dev.ampp.lastfm.ui.SettingsView;
 
 public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Sink {
 
-    /** 播放中的轮询间隔：1 秒足够做 scrobble 判定。 */
-    private static final long POLL_INTERVAL_MS = 1000L;
-    /** 暂停时降频，省电。 */
-    private static final long IDLE_POLL_INTERVAL_MS = 5000L;
+    /** 正在积累收听时长时的轮询间隔。2.5 秒足够做 scrobble 判定，唤醒次数降到原来的 40%。 */
+    private static final long POLL_ACTIVE_MS = 2500L;
+    /** 本曲已结算或已暂停时的兜底轮询，只用于发现被 hook 漏掉的换歌。 */
+    private static final long POLL_SETTLED_MS = 15000L;
 
     /** 设置页回调，运行在主线程。 */
     public interface UiCallback {
@@ -76,7 +76,9 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
                 return;
             }
             pollOnce();
-            mainHandler.postDelayed(this, playing ? POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS);
+            // 本曲 Now Playing 已发、scrobble 已结算，或已暂停：降到兜底频率。
+            boolean active = playing && !tracker.isSettled();
+            mainHandler.postDelayed(this, active ? POLL_ACTIVE_MS : POLL_SETTLED_MS);
         }
     };
 
@@ -206,16 +208,20 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
                     return;
                 }
                 player = args[0];
-                // 回调线程不保证是主线程，切到主线程统一读状态。
-                mainHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        pollOnce();
-                    }
-                });
+                // 回调线程不保证是主线程，切到主线程统一读状态；顺带重置轮询节奏。
+                wakeUp();
             }
         }));
         return 1;
+    }
+
+    /** 立即跑一次并重置轮询节奏（换歌、暂停/恢复时调用）。 */
+    private void wakeUp() {
+        if (mainHandler == null) {
+            return;
+        }
+        mainHandler.removeCallbacks(pollTask);
+        mainHandler.post(pollTask);
     }
 
     private void pollOnce() {
@@ -292,6 +298,9 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
         lastLikeAt = now;
 
         Snapshot snapshot = lastSnapshot;
+        if (snapshot == null && player != null) {
+            snapshot = bridge.read(player);
+        }
         boolean matched = snapshot != null && event.matches(snapshot);
         lastLikeEvent = event + " 匹配=" + matched;
 
@@ -589,7 +598,6 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
         StringBuilder sb = new StringBuilder();
         sb.append("state=").append(s.rawState)
                 .append("  rate=").append(s.rawRate)
-                .append("  like=").append(s.likeState)
                 .append("  pos=").append(s.positionMs / 1000L)
                 .append("/").append(s.durationMs / 1000L).append("s\n");
         sb.append("state 学习：播放时=").append(statePlaying < 0 ? "?" : String.valueOf(statePlaying))
@@ -599,10 +607,7 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
         sb.append("albumArtist=").append(orEmpty(s.albumArtist)).append('\n');
         sb.append("composer=").append(orEmpty(s.composer))
                 .append("  composerAsArtist=").append(s.composerAsArtist).append('\n');
-        sb.append("LikeState: LIKED=").append(bridge.likedState())
-                .append(" NONE=").append(bridge.noneState())
-                .append("  like=").append(s.likeState).append('\n');
-        sb.append("最近收藏事件=").append(lastLikeEvent);
+        sb.append("最近收藏事件=").append(lastLikeEvent).append('\n');
         sb.append("上报为=").append(track.artist);
         return sb.toString();
     }
