@@ -40,8 +40,6 @@ public final class SettingsView implements PluginSettingsSession {
     private final TextView accountView;
     private final TextView messageView;
     private final TextView sampleView;
-    private final TextView loveValue;
-    private final TextView loveHint;
 
     private volatile boolean closed;
 
@@ -63,7 +61,6 @@ public final class SettingsView implements PluginSettingsSession {
             queueLine.setText(plugin.queueSummary());
             accountView.setText(accountText());
             sampleView.setText(plugin.sampleText());
-            refreshLove();
             handler.postDelayed(this, 2000L);
         }
     };
@@ -216,22 +213,14 @@ public final class SettingsView implements PluginSettingsSession {
                 }));
         featureCard.addView(divider());
         featureCard.addView(switchRow("取消喜欢时同步取消",
-                "只撤销本插件标记过的，不动别处标的 loved", config.syncUnlove, new ToggleHandler() {
+                "先查 Last.fm 是否已 loved，是才取消", config.syncUnlove, new ToggleHandler() {
                     @Override
                     public void onChanged(boolean checked) {
                         config.syncUnlove = checked;
                         config.save();
                     }
                 }));
-        featureCard.addView(divider());
-        loveValue = text("", 13f, textSecondary);
-        featureCard.addView(infoRow("loved 记录", loveValue));
         column.addView(featureCard);
-
-        loveHint = hint("记录接近上限：最早标记的歌会被淘汰，那些歌取消喜欢时不会同步取消 Last.fm 的 loved。");
-        loveHint.setTextColor(0xFFFFA726);
-        loveHint.setVisibility(View.GONE);
-        column.addView(loveHint);
 
         // ---- 离线队列 ----
         column.addView(sectionLabel("离线队列"));
@@ -289,15 +278,6 @@ public final class SettingsView implements PluginSettingsSession {
             showMessage(message, ok);
         }
     };
-
-    private void refreshLove() {
-        int used = plugin.lovedCount();
-        int limit = plugin.lovedLimit();
-        loveValue.setText(used + " / " + limit);
-        boolean near = limit > 0 && used >= limit * 9 / 10;
-        loveValue.setTextColor(near ? 0xFFFFA726 : textSecondary);
-        loveHint.setVisibility(near ? View.VISIBLE : View.GONE);
-    }
 
     private String accountText() {
         if (config.hasSession()) {

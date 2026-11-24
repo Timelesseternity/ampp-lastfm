@@ -114,6 +114,34 @@ public final class LastfmClient {
         call(params);
     }
 
+    /**
+     * 查询该曲目在当前账号下是否已是 loved。
+     * 用 track.getInfo + username，不依赖本地记录，所以跨端（iPhone/Mac/网页）标的红心也能认出来。
+     */
+    public boolean isLoved(Track track) throws IOException, LastfmException {
+        Map<String, String> params = new TreeMap<String, String>();
+        params.put("method", "track.getInfo");
+        params.put("artist", track.artist);
+        params.put("track", track.title);
+        if (config.username.length() > 0) {
+            params.put("username", config.username);
+        }
+        JSONObject result = call(params);
+        JSONObject info = result.optJSONObject("track");
+        if (info == null) {
+            return false;
+        }
+        Object value = info.opt("userloved");
+        if (value == null) {
+            value = info.opt("userLoved");
+        }
+        if (value == null) {
+            return false;
+        }
+        String text = String.valueOf(value);
+        return "1".equals(text) || "true".equalsIgnoreCase(text);
+    }
+
     public void scrobble(List<ScrobbleQueue.Pending> batch) throws IOException, LastfmException {        if (batch.isEmpty()) {
             return;
         }

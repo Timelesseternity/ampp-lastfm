@@ -21,7 +21,6 @@ import dev.amenhancer.plugin.api.PluginRegistration;
 import dev.amenhancer.plugin.api.PluginSettingsSession;
 import dev.amenhancer.plugin.api.PluginUnsupportedException;
 import dev.ampp.lastfm.core.Config;
-import dev.ampp.lastfm.core.LoveStore;
 import dev.ampp.lastfm.core.PlaybackTracker;
 import dev.ampp.lastfm.core.ScrobbleQueue;
 import dev.ampp.lastfm.core.Snapshot;
@@ -47,7 +46,6 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
     private HostBridge bridge;
     private LastfmClient client;
     private ScrobbleQueue queue;
-    private LoveStore loveStore;
     private PlaybackTracker tracker;
     private ExecutorService net;
     private Handler mainHandler;
@@ -87,7 +85,6 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
         runtime = context;
         config = Config.load(context.getDataDirectory());
         queue = new ScrobbleQueue(context.getDataDirectory());
-        loveStore = new LoveStore(context.getDataDirectory());
         client = new LastfmClient(config);
         tracker = new PlaybackTracker(this);
         net = Executors.newSingleThreadExecutor();
@@ -309,11 +306,11 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
                 log("收藏事件未匹配当前播放：" + event, null);
                 return;
             }
-            requestLove(Track.from(snapshot, config), event.id, event.numericId);
+            requestLove(Track.from(snapshot, config));
         } else if (config.syncUnlove && !"Unknown".equals(event.state)) {
-            // 实测：撤销喜爱时 AM 给的是 state=None（不是 Unliked），所以非 Liked 都按撤销处理；
-            // 只有记录表里存在该曲目时才会真的发 unlove。
-            requestUnlove(event.id, event.numericId);
+            // 实测：撤销喜爱时 AM 给的是 state=None（不是 Unliked），所以非 Liked 都按撤销处理。
+            // 是否真的发 unlove，由 requestUnlove 向 Last.fm 反查决定。
+            requestUnlove(event);
         }
     }
 
@@ -339,10 +336,10 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
         }
         lastLikeKey = dedup;
         lastLikeAt = now;
-        requestUnlove(event.id, event.numericId);
+        requestUnlove(event);
     }
 
-    private void requestLove(final Track track, final String id, final long num) {
+    private void requestLove(final Track track) {
         if (!config.hasSession()) {
             return;
         }
@@ -352,7 +349,6 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
             public void run() {
                 try {
                     client.love(track);
-                    loveStore.add(id, num, track.artist, track.title);
                     log("已 love：" + track, null);
                 } catch (Throwable t) {
                     log("love 失败", t);
@@ -361,26 +357,27 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
         });
     }
 
-    private void requestUnlove(String id, long num) {
-        final LoveStore.Entry entry = loveStore.find(id, num);
-        if (entry == null) {
-            // 不是本插件标的，可能是网页或其它客户端标的，不动它。
-            log("撤销喜爱但不在本插件记录中，跳过：id=" + id + " num=" + num, null);
+    /** 撤销喜爱：先问 Last.fm 这首歌是否已 loved，是才取消。不依赖本地记录，跨端标的红心也认。 */
+    private void requestUnlove(HostBridge.LikeEvent event) {
+        Snapshot snapshot = lastSnapshot;
+        if (snapshot == null || !event.matches(snapshot)) {
+            log("撤销喜爱事件与当前播放不符，跳过：" + event, null);
             return;
         }
         if (!config.hasSession()) {
             return;
         }
-        final Track track = new Track();
-        track.artist = entry.artist;
-        track.title = entry.title;
-        statusText = "已取消喜欢：" + track.artist + " - " + track.title;
+        final Track track = Track.from(snapshot, config);
         net.submit(new Runnable() {
             @Override
             public void run() {
                 try {
+                    if (!client.isLoved(track)) {
+                        log("Last.fm 上不是 loved，无需取消：" + track, null);
+                        return;
+                    }
                     client.unlove(track);
-                    loveStore.remove(entry.id, entry.num);
+                    statusText = "已取消喜欢：" + track.artist + " - " + track.title;
                     log("已 unlove：" + track, null);
                 } catch (Throwable t) {
                     log("unlove 失败", t);
@@ -583,14 +580,6 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
     /** 最近一首歌的原始元数据，供设置页诊断用。 */
     public String sampleText() {
         return sampleText;
-    }
-
-    public int lovedCount() {
-        return loveStore.size();
-    }
-
-    public int lovedLimit() {
-        return LoveStore.MAX_ITEMS;
     }
 
     private String describe(Snapshot s) {
