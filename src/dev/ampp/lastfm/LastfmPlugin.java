@@ -34,7 +34,7 @@ public final class LastfmPlugin extends AmppPlugin implements PlaybackTracker.Si
     /** 正在积累收听时长时的轮询间隔。2.5 秒足够做 scrobble 判定，唤醒次数降到原来的 40%。 */
     private static final long POLL_ACTIVE_MS = 2500L;
     /** 本曲已结算或已暂停时的兜底轮询，只用于发现被 hook 漏掉的换歌。 */
-    private static final long POLL_SETTLED_MS = 15000L;
+    private static final long POLL_SETTLED_MS = 8000L;
 
     /** 设置页回调，运行在主线程。 */
     public interface UiCallback {
